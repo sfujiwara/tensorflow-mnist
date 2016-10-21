@@ -3,3 +3,5 @@ venv
 node_modules
 static/js/main.js
 .idea
+lib
+.DS_Store

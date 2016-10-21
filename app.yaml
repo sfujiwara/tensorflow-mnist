@@ -1,0 +1,15 @@
+application: cpb100demo1
+version: v1
+runtime: python27
+api_version: 1
+threadsafe: true
+
+libraries:
+- name: numpy
+  version: "1.6.1"
+
+handlers:
+- url: /static/js
+  static_dir: static/js
+- url: /.*
+  script: main.app
