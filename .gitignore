@@ -5,3 +5,5 @@ static/js/main.js
 .idea
 lib
 .DS_Store
+log
+MNIST_data
