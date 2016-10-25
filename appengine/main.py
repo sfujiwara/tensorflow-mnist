@@ -26,7 +26,7 @@ def mnist():
     )
     res = req.execute()
     output1 = res["predictions"][0]["scores"]
-    output2 = [0] * 784
+    output2 = [0] * 10
     return jsonify(results=[output1, output2])
 
 
