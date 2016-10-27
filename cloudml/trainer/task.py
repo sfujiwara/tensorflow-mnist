@@ -10,11 +10,12 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
 logging.basicConfig(level=logging.DEBUG)
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output_path", type=str)
 args, unknown_args = parser.parse_known_args()
-logging.info("known args: {}".format(args))
+tf.logging.info("known args: {}".format(args))
 
 # Get environment variable for Cloud ML
 tf_conf = json.loads(os.environ.get('TF_CONFIG', '{}'))
@@ -22,7 +23,7 @@ tf_conf = json.loads(os.environ.get('TF_CONFIG', '{}'))
 if not tf_conf:
     with open("local.yaml") as f:
         tf_conf = yaml.load(f)
-logging.info("TF_CONF: {}".format(json.dumps(tf_conf)))
+tf.logging.debug("TF_CONF: {}".format(json.dumps(tf_conf)))
 
 # Cluster setting for cloud
 cluster = tf_conf.get("cluster", None)
