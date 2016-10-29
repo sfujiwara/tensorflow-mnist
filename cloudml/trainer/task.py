@@ -4,7 +4,6 @@ import argparse
 import json
 import logging
 import os
-import yaml
 
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
@@ -18,11 +17,10 @@ args, unknown_args = parser.parse_known_args()
 tf.logging.info("known args: {}".format(args))
 
 # Get environment variable for Cloud ML
-tf_conf = json.loads(os.environ.get('TF_CONFIG', '{}'))
+tf_conf = json.loads(os.environ.get("TF_CONFIG", "{}"))
 # Local
 if not tf_conf:
-    with open("local.yaml") as f:
-        tf_conf = yaml.load(f)
+    tf_conf = json.load(open("local.json"))
 tf.logging.debug("TF_CONF: {}".format(json.dumps(tf_conf)))
 
 # Cluster setting for cloud
@@ -61,6 +59,8 @@ def main(_):
         )
 
         # Build graph
+        tf.logging.debug("/job:{0}/task:{1} build graph".format(tf_conf["task"]["type"], tf_conf["task"]["index"]))
+        tf.logging.debug(tf.get_default_graph().get_operations())
         with tf.Graph().as_default() as graph:
             with tf.device(device_fn):
                 global_step = tf.Variable(0, trainable=False, name="global_step")
@@ -136,6 +136,7 @@ def main(_):
                     # Save model
                     tf.train.Saver().export_meta_graph(filename="{}/model/export.meta".format(args.output_path))
                     saver.save(sess, "{}/model/export".format(args.output_path), write_meta_graph=False)
+                    # saver.save(sess, "{}/model/export".format(args.output_path))
             sv.stop()
             # if tf_conf["task"]["type"] == "master":
             #     sv.request_stop()
