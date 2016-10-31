@@ -10,9 +10,7 @@
       "gs://cpb100demo1-ml/cloudmldist/1476535081/trainer-0.0.0.tar.gz"
     ],
     "args": [
-      "--train_data_paths=gs://cloud-ml-data/mnist/train.tfr.gz",
-      "--eval_data_paths=gs://cloud-ml-data/mnist/eval.tfr.gz",
-      "--output_path=gs://cpb100demo1-ml/distributed20161015/output"
+      "--output_path=log"
     ],
     "python_module": "trainer.task",
     "region": "us-central1",

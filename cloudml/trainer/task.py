@@ -5,6 +5,7 @@ import json
 import logging
 import os
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -28,10 +29,21 @@ cluster = tf_conf.get("cluster", None)
 
 
 def inference(x_ph):
-    hidden = tf.contrib.layers.fully_connected(x_ph, 10)
-    with tf.name_scope("logits"):
-        logits = tf.nn.softmax(hidden)
-    return logits
+    # x_ph = tf.placeholder(tf.float32, shape=[None, 784], name="x_ph")
+    x_image_ph = tf.reshape(x_ph, [-1, 28, 28, 1])
+    h_conv1 = tf.contrib.layers.convolution2d(inputs=x_image_ph, num_outputs=32, kernel_size=5)
+    h_pool1 = tf.contrib.layers.max_pool2d(h_conv1, kernel_size=[2, 2], stride=[2, 2], padding="SAME")
+    h_conv2 = tf.contrib.layers.convolution2d(inputs=h_pool1, num_outputs=64, kernel_size=5)
+    h_pool2 = tf.contrib.layers.max_pool2d(h_conv2, kernel_size=[2, 2], stride=[2, 2], padding="SAME")
+    h_pool2_flat = tf.contrib.layers.flatten(h_pool2)
+    h_fc1 = tf.contrib.layers.fully_connected(h_pool2_flat, 1024)
+    h_fc2 = tf.contrib.layers.fully_connected(h_fc1, 10, activation_fn=None)
+    outputs = tf.nn.softmax(h_fc2)
+    return outputs
+    # hidden = tf.contrib.layers.fully_connected(x_ph, 10, activation_fn=None)
+    # with tf.name_scope("logits"):
+    #     logits = tf.nn.softmax(hidden)
+    # return logits
 
 
 def build_loss(y_ph, logits):
@@ -63,13 +75,16 @@ def main(_):
         tf.logging.debug(tf.get_default_graph().get_operations())
         with tf.Graph().as_default() as graph:
             with tf.device(device_fn):
+                count = tf.Variable(0, name="count")
+                add_op = tf.add(count, 1)
+                countup_op = tf.assign(count, add_op)
                 global_step = tf.Variable(0, trainable=False, name="global_step")
                 x_ph = tf.placeholder(tf.float32, shape=[None, 784], name="x_ph")
                 y_ph = tf.placeholder(tf.float32, shape=[None, 10], name="y_ph")
                 logits = inference(x_ph)
                 loss = build_loss(y_ph, logits)
                 tf.scalar_summary("loss", loss)
-                train_op = tf.train.GradientDescentOptimizer(0.002).minimize(
+                train_op = tf.train.AdamOptimizer(1e-4).minimize(
                     loss,
                     global_step=global_step
                 )
@@ -98,8 +113,14 @@ def main(_):
             # print "/job:{0}/task:{1} waiting".format(args.job_name, args.task_index)
             mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
             for i in range(1000):
-                x_batch, y_batch = mnist.train.next_batch(200)
+                x_batch, y_batch = mnist.train.next_batch(50)
                 iter, _ = sess.run([global_step, train_op], feed_dict={x_ph: x_batch, y_ph: y_batch})
+                sess.run(countup_op)
+                # tf.logging.debug(
+                #     "/job:{0}/task:{1} local iter: {2} count: {3}".format(
+                #         tf_conf["task"]["type"], tf_conf["task"]["index"], iter, sess.run(count)
+                #     )
+                # )
                 # Write summary if server is master
                 if tf_conf["task"]["type"] == "master" and i % 10 == 0:
                     fd = {x_ph: mnist.test.images, y_ph: mnist.test.labels}
