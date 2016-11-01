@@ -1,3 +1,5 @@
+# MNIST Classification with TensorFlow
+
 ## Training on Cloud Machine Learning
 
 ```
@@ -19,4 +21,10 @@ gcloud beta ml jobs submit training ${JOB_NAME} \
   --config=config.yaml \
   -- \
   --output_path="${TRAIN_PATH}"
+```
+
+## Training on Local
+
+```
+python -m trainer.task --output_path=log
 ```
