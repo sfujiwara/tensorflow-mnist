@@ -3,16 +3,12 @@
 ## Training on Cloud Machine Learning
 
 ```
-JOB_NAME=<your job name>
-
+ALGORITHM="cnn"
+JOB_NAME="${ALGORITHM}`date '+%Y%m%d%H%M%S'`"
 PROJECT_ID=`gcloud config list project --format "value(core.project)"`
-TRAIN_BUCKET=gs://${PROJECT_ID}-ml
-TRAIN_PATH=${TRAIN_BUCKET}/${JOB_NAME}
-gsutil rm -rf ${TRAIN_PATH}
+TRAIN_PATH=gs://${PROJECT_ID}-ml/mnist/${JOB_NAME}
 gsutil cp .dummy ${TRAIN_PATH}/model/
-```
 
-```
 gcloud beta ml jobs submit training ${JOB_NAME} \
   --package-path=trainer \
   --module-name=trainer.task \
@@ -20,7 +16,8 @@ gcloud beta ml jobs submit training ${JOB_NAME} \
   --region=us-central1 \
   --config=config.yaml \
   -- \
-  --output_path="${TRAIN_PATH}"
+  --output_path="${TRAIN_PATH}" \
+  --algorithm="${ALGORITHM}"
 ```
 
 ## Training on Local

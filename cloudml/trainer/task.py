@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import logging
 import os
 
 import tensorflow as tf
@@ -11,19 +10,22 @@ from tensorflow.examples.tutorials.mnist import input_data
 import modelsr
 import modelcnn
 
-logging.basicConfig(level=logging.DEBUG)
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output_path", type=str)
+parser.add_argument("--algorithm", type=str, default="cnn")
 args, unknown_args = parser.parse_known_args()
 tf.logging.info("known args: {}".format(args))
 
 # Get environment variable for Cloud ML
 tf_conf = json.loads(os.environ.get("TF_CONFIG", "{}"))
-# Local
+# For local
 if not tf_conf:
-    tf_conf = json.load(open("local.json"))
+    tf_conf = {
+      "cluster": {"master": ["localhost:2222"]},
+      "task": {"index": 0, "type": "master"}
+    }
 tf.logging.debug("TF_CONF: {}".format(json.dumps(tf_conf)))
 
 # Cluster setting for cloud
@@ -32,8 +34,12 @@ cluster = tf_conf.get("cluster", None)
 
 def main(_):
     # Select model (Softmax Regression or CNN)
-    # model = modelsr.MnistSr()
-    model = modelcnn.MnistCnn()
+    if args.algorithm == "softmax_regression":
+        tf.logging.info("algorithm: softmax regression")
+        model = modelsr.MnistSr()
+    else:
+        tf.logging.info("algorithm: convolutional neural network")
+        model = modelcnn.MnistCnn()
 
     cluster_spec = tf.train.ClusterSpec(cluster=cluster)
     server = tf.train.Server(
@@ -51,19 +57,16 @@ def main(_):
             cluster=cluster_spec,
             worker_device="/job:{0}/task:{1}".format(tf_conf["task"]["type"], tf_conf["task"]["index"]),
         )
-
         # Build graph
         tf.logging.debug("/job:{0}/task:{1} build graph".format(tf_conf["task"]["type"], tf_conf["task"]["index"]))
         tf.logging.debug(tf.get_default_graph().get_operations())
         with tf.Graph().as_default() as graph:
             with tf.device(device_fn):
-                count = tf.Variable(0, name="count")
-                add_op = tf.add(count, 1)
-                countup_op = tf.assign(count, add_op)
                 global_step = tf.Variable(0, trainable=False, name="global_step")
                 x_ph = tf.placeholder(tf.float32, shape=[None, 784], name="x_ph")
                 y_ph = tf.placeholder(tf.float32, shape=[None, 10], name="y_ph")
-                logits = model.inference(x_ph)
+                keep_prob_ph = tf.placeholder(tf.float32, name="keep_prob_ph")
+                logits = model.inference(x_ph, is_training=True, keep_prob_ph=keep_prob_ph)
                 loss = model.build_loss(y_ph, logits)
                 tf.scalar_summary("loss", loss)
                 train_op = tf.train.AdamOptimizer(1e-4).minimize(
@@ -91,42 +94,36 @@ def main(_):
         )
 
         with sv.managed_session(server.target) as sess:
-            # summary_writer = tf.train.SummaryWriter("{}/test".format(args.output_path), sess.graph)
-            # print "/job:{0}/task:{1} waiting".format(args.job_name, args.task_index)
             mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
             for i in range(1000):
                 x_batch, y_batch = mnist.train.next_batch(50)
-                iter, _ = sess.run([global_step, train_op], feed_dict={x_ph: x_batch, y_ph: y_batch})
-                sess.run(countup_op)
-                # tf.logging.debug(
-                #     "/job:{0}/task:{1} local iter: {2} count: {3}".format(
-                #         tf_conf["task"]["type"], tf_conf["task"]["index"], iter, sess.run(count)
-                #     )
-                # )
+                fd = {x_ph: x_batch, y_ph: y_batch, keep_prob_ph: 0.5}
+                iter, _ = sess.run([global_step, train_op], feed_dict=fd)
                 # Write summary if server is master
                 if tf_conf["task"]["type"] == "master" and i % 10 == 0:
-                    fd = {x_ph: mnist.test.images, y_ph: mnist.test.labels}
+                    fd = {x_ph: mnist.test.images, y_ph: mnist.test.labels, keep_prob_ph: 1.}
                     sv.summary_computed(sess, sess.run(summary_op, feed_dict=fd), global_step=i)
-                    logging.info(
+                    tf.logging.info(
                         "save scalar summary (iter: {0} type: {1} index: {2})".format(
                             i, tf_conf["task"]["type"], tf_conf["task"]["index"]
                         )
                     )
                 # summary_writer.add_summary(summary_str, i)
                 if iter % 100 == 0:
-                    acc = sess.run(accuracy, feed_dict={x_ph: mnist.test.images, y_ph: mnist.test.labels})
-                    logging.info("global_step: {}".format(iter))
-                    logging.info(
+                    fd = {x_ph: mnist.test.images, y_ph: mnist.test.labels, keep_prob_ph: 1.}
+                    acc = sess.run(accuracy, feed_dict=fd)
+                    tf.logging.info("global_step: {}".format(iter))
+                    tf.logging.info(
                         "- /job:{0}/task:{1} - Accuracy: {2}".format(
                             tf_conf["task"]["type"], tf_conf["task"]["index"], acc
                         )
                     )
-            # Export prediction graph
+            # Only master exports prediction graph
             if tf_conf["task"]["type"] == "master":
                 with tf.Graph().as_default():
-                    logging.info("save model to {}".format(args.output_path))
+                    tf.logging.info("save model to {}".format(args.output_path))
                     x = tf.placeholder(tf.float32, shape=[None, 784], name="x_ph")
-                    p = model.inference(x)
+                    p = model.inference(x, is_training=False)
                     # Define key element
                     input_key = tf.placeholder(tf.int64, [None, ], name="key")
                     output_key = tf.identity(input_key)
@@ -138,7 +135,6 @@ def main(_):
                     # Save model
                     tf.train.Saver().export_meta_graph(filename="{}/model/export.meta".format(args.output_path))
                     saver.save(sess, "{}/model/export".format(args.output_path), write_meta_graph=False)
-                    # saver.save(sess, "{}/model/export".format(args.output_path))
             sv.stop()
             # if tf_conf["task"]["type"] == "master":
             #     sv.request_stop()

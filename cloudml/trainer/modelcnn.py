@@ -9,7 +9,7 @@ class MnistCnn:
         pass
 
     @staticmethod
-    def inference(x_ph):
+    def inference(x_ph, keep_prob_ph=None, is_training=True):
         # Resize rank 1 Tensor to rank 2 Tensor
         x_image_ph = tf.reshape(x_ph, [-1, 28, 28, 1])
         # Convolution layer 1
@@ -22,6 +22,9 @@ class MnistCnn:
         h_pool2_flat = tf.contrib.layers.flatten(h_pool2)
         # Fully connected layer 1
         h_fc1 = tf.contrib.layers.fully_connected(h_pool2_flat, 1024)
+        # Apply dropout
+        if is_training:
+            h_fc1 = tf.nn.dropout(h_fc1, keep_prob=keep_prob_ph)
         # Fully connected layer 2
         h_fc2 = tf.contrib.layers.fully_connected(h_fc1, 10, activation_fn=None)
         outputs = tf.nn.softmax(h_fc2)
