@@ -82,7 +82,7 @@ def main(_):
                 # Summary operation
                 summary_op = tf.merge_all_summaries()
                 # Model saver
-                saver = tf.train.Saver()
+                # saver = tf.train.Saver()
 
         sv = tf.train.Supervisor(
             graph=graph,
@@ -133,7 +133,9 @@ def main(_):
                     tf.add_to_collection("inputs", json.dumps(inputs))
                     tf.add_to_collection("outputs", json.dumps(outputs))
                     # Save model
-                    tf.train.Saver().export_meta_graph(filename="{}/model/export.meta".format(args.output_path))
+                    saver = tf.train.Saver()
+                    saver.export_meta_graph(filename="{}/model/export.meta".format(args.output_path))
+                    # tf.train.Saver().export_meta_graph(filename="{}/model/export.meta".format(args.output_path))
                     saver.save(sess, "{}/model/export".format(args.output_path), write_meta_graph=False)
             sv.stop()
             # if tf_conf["task"]["type"] == "master":
